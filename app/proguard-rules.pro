@@ -1,0 +1,3 @@
+-keep class ms.bd.c.** { *; }
+-keep class com.bytedance.mobsec.metasec.ml.** { *; }
+-keep class com.example.fqdownloader.native.** { *; }
