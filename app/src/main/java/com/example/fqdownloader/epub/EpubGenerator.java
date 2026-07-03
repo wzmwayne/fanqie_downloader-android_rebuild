@@ -52,6 +52,7 @@ public class EpubGenerator {
                 var ch = i < chapters.size() ? chapters.get(i) : null;
                 String title = ch != null ? ch.title : "章节" + (i + 1);
                 String body = contents.getOrDefault(i, "");
+                if (body.trim().isEmpty()) body = "<p style=\"color:#999;\">（内容获取失败）</p>";
                 String fname = String.format("chapter_%05d.xhtml", i + 1);
                 zos.putNextEntry(new ZipEntry("OEBPS/" + fname));
                 zos.write(chapterXhtml(title, body).getBytes(StandardCharsets.UTF_8));

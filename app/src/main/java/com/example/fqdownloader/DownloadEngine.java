@@ -466,7 +466,8 @@ public class DownloadEngine {
     }
 
     private ImageInfo downloadImage(String url) {
-        if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
+        url = ensureAbsolute(url);
+        if (url == null) return null;
         try {
             byte[] data = simpleHttpGet(url);
             var mimeAndExt = sniffMime(data);
@@ -478,9 +479,10 @@ public class DownloadEngine {
     }
 
     private String downloadAndCacheImage(String url, ConcurrentHashMap<String, ImageInfo> cache) {
+        url = ensureAbsolute(url);
+        if (url == null) return null;
         var existing = cache.get(url);
         if (existing != null) return existing.filename;
-        if (!url.startsWith("http://") && !url.startsWith("https://")) return url;
         try {
             byte[] data = simpleHttpGet(url);
             var mimeAndExt = sniffMime(data);
@@ -571,12 +573,20 @@ public class DownloadEngine {
             var page = jo.get("page");
             if (page instanceof JsonValue.JsonObject p) {
                 var url = p.str("thumbUrl");
-                if (url != null && !url.trim().isEmpty()) return url;
+                if (url != null && !url.trim().isEmpty()) return ensureAbsolute(url);
                 var thumbUri = p.str("thumbUri");
-                if (thumbUri != null && !thumbUri.trim().isEmpty()) return thumbUri;
+                if (thumbUri != null && !thumbUri.trim().isEmpty()) return ensureAbsolute(thumbUri);
             }
         }
         return null;
+    }
+
+    private String ensureAbsolute(String url) {
+        if (url == null) return null;
+        url = url.trim();
+        if (url.startsWith("http://") || url.startsWith("https://")) return url;
+        if (url.startsWith("//")) return "https:" + url;
+        return "https://fanqienovel.com" + (url.startsWith("/") ? "" : "/") + url;
     }
 
     private List<Chapter> fetchChaptersWithFallback(String bookId) {
