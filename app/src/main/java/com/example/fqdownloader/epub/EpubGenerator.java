@@ -77,7 +77,7 @@ public class EpubGenerator {
                      .getBytes(StandardCharsets.UTF_8));
             zos.closeEntry();
 
-            zos.putNextEntry(new ZipEntry("OEBPS/toc.ncx"));
+            zos.putNextEntry(new ZipEntry("toc.ncx"));
             zos.write(ncxXml(bookId, bookName, chapters, itemIds, totalChapters)
                      .getBytes(StandardCharsets.UTF_8));
             zos.closeEntry();
@@ -106,7 +106,7 @@ public class EpubGenerator {
         if (coverHref != null) sb.append("    <meta name=\"cover\" content=\"cover-image\"/>\n");
         sb.append("  </metadata>\n");
         sb.append("  <manifest>\n");
-        sb.append("    <item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>\n");
+            sb.append("    <item id=\"ncx\" href=\"../toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>\n");
         sb.append("    <item id=\"css\" href=\"stylesheet.css\" media-type=\"text/css\"/>\n");
         if (coverHref != null)
             sb.append("    <item id=\"cover\" href=\"").append(coverHref).append("\" media-type=\"application/xhtml+xml\"/>\n");
@@ -151,7 +151,7 @@ public class EpubGenerator {
             String title = ch != null ? ch.title : "章节" + (i + 1);
             sb.append("    <navPoint id=\"navpoint-").append(i + 1).append("\" playOrder=\"").append(i + 1).append("\">\n");
             sb.append("      <navLabel><text>").append(xmlEscape(title)).append("</text></navLabel>\n");
-            sb.append("      <content src=\"").append(itemIds.get(i)).append("\"/>\n");
+            sb.append("      <content src=\"OEBPS/").append(itemIds.get(i)).append("\"/>\n");
             sb.append("    </navPoint>\n");
         }
         sb.append("  </navMap>\n</ncx>\n");
