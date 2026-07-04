@@ -17,17 +17,71 @@ import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Activation {
 
     private static final String TAG = "Activation";
-    private static final String GITHUB_RAW = "https://raw.githubusercontent.com/wzmwayne/fanqie_downloader-android_rebuild/main/docs";
-    private static final String PUBLIC_KEY_URL = GITHUB_RAW + "/public_key.pem";
-    private static final String ISSUED_URL = GITHUB_RAW + "/issued.json";
+    private static final String RAW_PATH = "https://raw.githubusercontent.com/wzmwayne/fanqie_downloader-android_rebuild/main/docs";
+    private static final String PUBLIC_KEY_FILE = "/public_key.pem";
+    private static final String ISSUED_FILE = "/issued.json";
     private static final String PACKAGE_NAME = "com.example.fqdownloader";
     private static final String ACTIVE_FILE = "activation.dat";
     private static final String CACHED_KEY_FILE = "cached_public_key.pem";
     private static final String CACHED_ISSUED_FILE = "cached_issued.json";
+
+    private static final String[] PROXIES = {
+        "",
+        "https://gh.llkk.cc/",
+        "https://github.tbedu.top/",
+        "https://ghfile.geekertao.top/",
+        "https://ghproxy.net/",
+        "https://gh-proxy.com/",
+        "https://gh-proxy.net/",
+        "https://cdn.gh-proxy.com/",
+        "https://github.dpik.top/",
+        "https://j.1lin.dpdns.org/",
+        "https://github.starrlzy.cn/",
+        "https://github-proxy.memory-echoes.cn/",
+        "https://git.yylx.win/",
+        "https://ghm.078465.xyz/",
+        "https://gh.927223.xyz/",
+        "https://gh.felicity.ac.cn/",
+        "https://gh.bugdey.us.kg/",
+        "https://cdn.akaere.online/",
+        "https://gh.dpik.top/",
+        "https://gh.inkchills.cn/",
+        "https://gh.catmak.name/",
+        "https://gh.b52m.cn/",
+        "https://github.mxw.qzz.io/",
+        "https://gh.acmsz.top/",
+        "https://gh.jjj.gv.uy/",
+        "https://githubdog.com/",
+        "https://gh.meali.top/",
+        "https://slink.ltd/",
+        "https://github.tmby.shop/",
+        "https://ghpr.cc/",
+        "https://gh.tryxd.cn/",
+        "https://gitproxy.click/",
+        "https://github.chenc.dev/",
+        "https://gh.ddlc.top/",
+        "https://gitproxy.mrhjx.cn/",
+        "https://gh.sixyin.com/",
+        "https://gh.monlor.com/",
+        "https://ghfast.top/",
+        "https://gh.jasonzeng.dev/",
+        "https://github.geekery.cn/",
+        "https://fastgit.cc/",
+        "https://github.ednovas.xyz/",
+        "https://ghproxy.imciel.com/",
+        "https://github.xxlab.tech/",
+        "https://gh.idayer.com/",
+        "https://gh.chjina.com/",
+        "https://ghp.keleyaa.com/",
+        "https://ghproxy.monkeyray.net/",
+        "https://gh.noki.icu/",
+    };
 
     public static boolean isActivated(Context ctx) {
         return new File(ctx.getFilesDir(), ACTIVE_FILE).exists();
@@ -93,14 +147,10 @@ public class Activation {
                 cached.delete();
             }
         }
-        try {
-            String content = httpGet(PUBLIC_KEY_URL);
-            if (content != null && content.contains("BEGIN PUBLIC KEY")) {
-                writeFile(cached, content);
-                return content;
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "网络获取公钥失败", e);
+        String content = tryFetch(ctx, RAW_PATH + PUBLIC_KEY_FILE);
+        if (content != null && content.contains("BEGIN PUBLIC KEY")) {
+            try { writeFile(cached, content); } catch (Exception ignored) {}
+            return content;
         }
         return null;
     }
@@ -123,7 +173,7 @@ public class Activation {
     private static String fetchIssuedJson(Context ctx) {
         File cached = new File(ctx.getFilesDir(), CACHED_ISSUED_FILE);
         try {
-            String content = httpGet(ISSUED_URL);
+            String content = tryFetch(ctx, RAW_PATH + ISSUED_FILE);
             if (content != null) {
                 writeFile(cached, content);
                 return content;
@@ -135,17 +185,35 @@ public class Activation {
         return null;
     }
 
+    private static String tryFetch(Context ctx, String rawUrl) {
+        List<String> urls = new ArrayList<>();
+        for (String proxy : PROXIES) {
+            if (proxy.isEmpty()) {
+                urls.add(rawUrl);
+            } else {
+                urls.add(proxy + rawUrl);
+            }
+        }
+
+        for (String url : urls) {
+            try {
+                String result = httpGet(url);
+                if (result != null) return result;
+            } catch (Exception e) {
+                Log.d(TAG, "代理失败: " + url + " → " + e.getClass().getSimpleName());
+            }
+        }
+        return null;
+    }
+
     private static String httpGet(String urlStr) throws Exception {
         URL url = new URL(urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setConnectTimeout(8000);
-        conn.setReadTimeout(8000);
+        conn.setConnectTimeout(6000);
+        conn.setReadTimeout(6000);
         conn.setRequestProperty("User-Agent", "FqDownloader");
         int code = conn.getResponseCode();
-        if (code != 200) {
-            Log.w(TAG, "HTTP " + code + " for " + urlStr);
-            return null;
-        }
+        if (code != 200) return null;
         try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
             StringBuilder sb = new StringBuilder();
             String line;
