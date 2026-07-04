@@ -44,11 +44,9 @@ echo "$ACTIVATION_CODE" > "$DIR/activation_code.txt"
 echo ""
 echo "已保存到 $DIR/activation_code.txt"
 
-# 可选生成 QR 码
-if command -v qrencode &>/dev/null; then
-    qrencode -o "$DIR/activation_qr_$ID.png" "$ACTIVATION_CODE"
-    echo "QR 码: $DIR/activation_qr_$ID.png"
-fi
+# 生成 QR 码
+qrencode -o "$DIR/activation_qr_$ID.png" "$ACTIVATION_CODE"
+echo "QR 码: $DIR/activation_qr_$ID.png"
 
 echo ""
 echo "请提交 docs/issued.json 到 git:"
