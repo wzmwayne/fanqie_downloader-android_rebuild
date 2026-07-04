@@ -4,7 +4,7 @@
     "0000000000000001": {
       "user": "wzmwayne",
       "expiry": "2030-12-31",
-      "warn_level": 3,
+      "warn_level": 4,
       "warn_text": "本软件仅限个人学习使用，请勿用于商业用途"
     }
   }
