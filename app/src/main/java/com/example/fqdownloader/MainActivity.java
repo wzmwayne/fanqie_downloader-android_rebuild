@@ -1,6 +1,7 @@
 package com.example.fqdownloader;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,6 +17,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.example.fqdownloader.jni.FqSigner;
+import com.example.fqdownloader.security.Activation;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -36,6 +38,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (!Activation.isActivated(this)) {
+            startActivity(new Intent(this, com.example.fqdownloader.security.ActivationActivity.class));
+            finish();
+            return;
+        }
+
+        Activation.checkAndRevoke(this);
+
         setContentView(R.layout.activity_main);
 
         tvLog = findViewById(R.id.tv_log);

@@ -8,3 +8,6 @@ local.properties
 *.apk
 *.ap_
 /.nav/
+tools/*.pem
+tools/*.txt
+tools/*.png
