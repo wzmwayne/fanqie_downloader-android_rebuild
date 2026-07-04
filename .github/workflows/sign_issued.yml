@@ -1,0 +1,34 @@
+name: 签名 issued.json
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_msg:
+        description: 提交信息（可选）
+        required: false
+        default: 'chore: 更新 issued.json.sig'
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 签名 issued.json
+        env:
+          PRIVATE_KEY: ${{ secrets.ISSUED_PRIVATE_KEY }}
+        run: |
+          echo "$PRIVATE_KEY" > /tmp/private_key.pem
+          openssl dgst -sha256 -sign /tmp/private_key.pem -out /tmp/issued.sig.raw docs/issued.json
+          openssl base64 -A -in /tmp/issued.sig.raw > docs/issued.json.sig
+          rm -f /tmp/private_key.pem /tmp/issued.sig.raw
+
+      - name: 提交并推送
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/issued.json.sig
+          git diff --cached --quiet || git commit -m "${{ github.event.inputs.commit_msg }}"
+          git push
