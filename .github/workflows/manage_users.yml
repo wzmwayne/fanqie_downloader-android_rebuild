@@ -1,0 +1,141 @@
+name: 管理激活码
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 操作
+        required: true
+        type: choice
+        options:
+          - add
+          - modify
+          - remove
+      id:
+        description: 激活码 ID（16 位）
+        required: true
+      user:
+        description: 用户名（add/modify 时必填）
+        required: false
+        default: ''
+      expiry:
+        description: 过期日期，如 2026-12-31（add/modify 时必填）
+        required: false
+        default: ''
+      warn_level:
+        description: 警告等级 0-4（add 默认 0，modify 可选）
+        required: false
+        default: '0'
+      warn_text:
+        description: 警告文本（可选）
+        required: false
+        default: ''
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 校验输入
+        run: |
+          ID="${{ github.event.inputs.id }}"
+          ACTION="${{ github.event.inputs.action }}"
+          if [ ${#ID} -ne 16 ]; then
+            echo "❌ ID 必须为 16 位"
+            exit 1
+          fi
+          if [ "$ACTION" = "add" ] || [ "$ACTION" = "modify" ]; then
+            if [ -z "${{ github.event.inputs.user }}" ]; then
+              echo "❌ add/modify 需要提供 user"
+              exit 1
+            fi
+            if [ -z "${{ github.event.inputs.expiry }}" ]; then
+              echo "❌ add/modify 需要提供 expiry"
+              exit 1
+            fi
+          fi
+          echo "✅ 输入校验通过"
+
+      - name: 修改 issued.json
+        id: edit
+        run: |
+          ID="${{ github.event.inputs.id }}"
+          ACTION="${{ github.event.inputs.action }}"
+          FILE="docs/issued.json"
+
+          # 读取当前 latest 版本号
+          LATEST=$(jq '.latest' "$FILE")
+          EXISTS=$(jq --arg id "$ID" '.codes | has($id)' "$FILE")
+
+          LATEST=$((LATEST + 1))
+
+          if [ "$ACTION" = "add" ]; then
+            if [ "$EXISTS" = "true" ]; then
+              echo "❌ ID $ID 已存在"
+              exit 1
+            fi
+            jq --arg id "$ID" \
+               --arg user "${{ github.event.inputs.user }}" \
+               --arg expiry "${{ github.event.inputs.expiry }}" \
+               --argjson warn_level ${{ github.event.inputs.warn_level }} \
+               --arg warn_text "${{ github.event.inputs.warn_text }}" \
+               --argjson latest "$LATEST" \
+               '.codes[$id] = {user: $user, expiry: $expiry, warn_level: $warn_level, warn_text: $warn_text} | .latest = $latest' \
+               "$FILE" > /tmp/issued.json && mv /tmp/issued.json "$FILE"
+            echo "✅ 已添加 ID=$ID"
+
+          elif [ "$ACTION" = "modify" ]; then
+            if [ "$EXISTS" != "true" ]; then
+              echo "❌ ID $ID 不存在，无法修改"
+              exit 1
+            fi
+            jq --arg id "$ID" \
+               --arg user "${{ github.event.inputs.user }}" \
+               --arg expiry "${{ github.event.inputs.expiry }}" \
+               --argjson warn_level ${{ github.event.inputs.warn_level }} \
+               --arg warn_text "${{ github.event.inputs.warn_text }}" \
+               --argjson latest "$LATEST" \
+               '.codes[$id].user = $user |
+                .codes[$id].expiry = $expiry |
+                .codes[$id].warn_level = $warn_level |
+                .codes[$id].warn_text = $warn_text |
+                .latest = $latest' \
+               "$FILE" > /tmp/issued.json && mv /tmp/issued.json "$FILE"
+            echo "✅ 已修改 ID=$ID"
+
+          elif [ "$ACTION" = "remove" ]; then
+            if [ "$EXISTS" != "true" ]; then
+              echo "❌ ID $ID 不存在"
+              exit 1
+            fi
+            jq --arg id "$ID" \
+               --argjson latest "$LATEST" \
+               'del(.codes[$id]) | .latest = $latest' \
+               "$FILE" > /tmp/issued.json && mv /tmp/issued.json "$FILE"
+            echo "✅ 已删除 ID=$ID"
+          fi
+
+          echo "最新的 issued.json:"
+          cat "$FILE"
+
+      - name: 签名 issued.json
+        env:
+          PRIVATE_KEY: ${{ secrets.ISSUED_PRIVATE_KEY }}
+        run: |
+          echo "$PRIVATE_KEY" > /tmp/private_key.pem
+          openssl dgst -sha256 -sign /tmp/private_key.pem -out /tmp/issued.sig.raw docs/issued.json
+          openssl base64 -A -in /tmp/issued.sig.raw > docs/issued.json.sig
+          rm -f /tmp/private_key.pem /tmp/issued.sig.raw
+
+      - name: 提交并推送
+        run: |
+          ID="${{ github.event.inputs.id }}"
+          ACTION="${{ github.event.inputs.action }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/issued.json docs/issued.json.sig
+          git diff --cached --quiet || git commit -m "manage: $ACTION ID=$ID"
+          git push
