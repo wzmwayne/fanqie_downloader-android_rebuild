@@ -1,5 +1,5 @@
 {
-  "latest": 2,
+  "latest": 3,
   "codes": {
     "0000000000000001": {
       "user": "wzmwayne",
@@ -12,6 +12,12 @@
       "expiry": "2030-12-31",
       "warn_level": 0,
       "warn_text": ""
+    },
+    "0000000000000003": {
+      "user": "wzmwayne",
+      "expiry": "2030-12-31",
+      "warn_level": 1,
+      "warn_text": "测试警告：请勿分享激活码"
     }
   }
 }
