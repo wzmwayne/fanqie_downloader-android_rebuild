@@ -1,0 +1,11 @@
+{
+  "latest": 1,
+  "codes": {
+    "0000000000000001": {
+      "user": "wzmwayne",
+      "expiry": "2027-12-31",
+      "warn_level": 0,
+      "warn_text": ""
+    }
+  }
+}
