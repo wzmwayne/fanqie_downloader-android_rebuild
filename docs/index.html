@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>激活码管理工具</title>
+<script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js">
+</script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; }
+.header { background: #1a1a2e; color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 18px; }
+.header button { background: #e94560; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.header button:hover { background: #d63851; }
+.container { max-width: 900px; margin: 0 auto; padding: 16px; }
+.card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12); margin-bottom: 16px; overflow: hidden; }
+.card h2 { font-size: 15px; padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
+.card-body { padding: 16px; }
+.btn { display: inline-block; padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.btn-primary { background: #0f3460; color: #fff; }
+.btn-primary:hover { background: #0c2a4a; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-danger { background: #e94560; color: #fff; }
+.btn-success { background: #16a34a; color: #fff; }
+.btn-success:hover { background: #15803d; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+input[type=text], input[type=password] { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; width: 100%; }
+input:focus { outline: none; border-color: #0f3460; box-shadow: 0 0 0 2px rgba(15,52,96,.15); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eee; }
+th { background: #f9fafb; font-weight: 600; }
+.log { background: #1a1a2e; color: #a5d6ff; padding: 12px 16px; border-radius: 4px; font-family: "SF Mono", "Cascadia Code", monospace; font-size: 12px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; line-height: 1.6; margin-top: 12px; display: none; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.tag-0 { background: #e5e7eb; color: #374151; }
+.tag-1 { background: #fef9c3; color: #854d0e; }
+.tag-2 { background: #fde68a; color: #991b1b; }
+.tag-3 { background: #fecaca; color: #7f1d1d; }
+.tag-4 { background: #450a0a; color: #fff; }
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: #fff; border-radius: 8px; width: 500px; max-width: 90vw; max-height: 80vh; overflow-y: auto; padding: 24px; }
+.modal h3 { margin-bottom: 16px; }
+.modal label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: #374151; }
+.modal .field { margin-bottom: 12px; }
+.modal textarea { width: 100%; height: 200px; font-family: "SF Mono", monospace; font-size: 12px; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; resize: vertical; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.key-hint { font-size: 12px; color: #6b7280; margin-top: 4px; }
+#codeOutput { word-break: break-all; background: #f3f4f6; padding: 10px 12px; border-radius: 4px; font-family: "SF Mono", monospace; font-size: 12px; margin-top: 8px; display: none; }
+.copy-btn { cursor: pointer; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🛠 激活码管理工具</h1>
+  <button onclick="showKeyModal()" id="keyBtn">设置私钥</button>
+</div>
+
+<div class="container">
+
+  <!-- 代理测速 -->
+  <div class="card">
+    <h2>📡 代理测速</h2>
+    <div class="card-body">
+      <button class="btn btn-primary" onclick="benchmark()" id="benchBtn">开始测速</button>
+      <span style="font-size:12px;color:#6b7280;margin-left:8px">20线程并发测试 49 个节点</span>
+      <div class="log" id="benchLog"></div>
+      <div id="benchResult" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- 获取云端配置 -->
+  <div class="card">
+    <h2>☁️ 获取云端配置</h2>
+    <div class="card-body">
+      <button class="btn btn-success" onclick="fetchConfig()" id="fetchBtn">获取配置</button>
+      <span style="font-size:12px;color:#6b7280;margin-left:8px">拉取 issued.json 并验签</span>
+      <div class="log" id="fetchLog"></div>
+      <div id="configResult" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- 生成激活码 -->
+  <div class="card">
+    <h2>🔑 生成激活码</h2>
+    <div class="card-body">
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <div style="flex:1">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">用户 ID（16 位）</label>
+          <input type="text" id="genId" placeholder="0000000000000001" maxlength="16" style="width:200px">
+        </div>
+        <div style="padding-top:20px">
+          <button class="btn btn-primary" onclick="generateCode()" id="genBtn">生成激活码</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:flex-start;gap:8px">
+        <div id="codeOutput"></div>
+        <button class="btn btn-sm btn-success copy-btn" onclick="copyCode()" id="copyBtn" style="display:none">复制</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 私钥设置弹窗 -->
+<div class="modal-overlay" id="keyModal">
+  <div class="modal">
+    <h3>设置私钥</h3>
+    <p style="font-size:13px;color:#6b7280;margin-bottom:12px">粘贴 RSA 私钥（PKCS#1 格式），仅存储在你的浏览器本地。</p>
+    <div class="field">
+      <label>私钥内容</label>
+      <textarea id="keyInput" placeholder="-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA...
+...
+-----END RSA PRIVATE KEY-----"></textarea>
+    </div>
+    <div class="key-hint" id="keyHint">当前：未设置</div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="clearKey()">清除</button>
+      <button class="btn btn-success" onclick="saveKey()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 配置 ──
+
+const RAW_PATH = 'https://raw.githubusercontent.com/wzmwayne/fanqie_downloader-android_rebuild/main/docs';
+const PUBLIC_KEY_FILE = '/public_key.pem';
+const ISSUED_FILE = '/issued.json';
+const ISSUED_SIG_FILE = '/issued.json.sig';
+
+// 嵌入式公钥
+const EMBEDDED_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA8b7awc30XBdR2RxJ2EZW
+Vw20/UfTn+/JNC2TIVsxjecYf9bG7vFamgyXRiVRaWFzQp2EprGWpirLFpe9wYvJ
+DT0ywKNlA2h6HI9wlyx2cjwkkD6BYHt3VhsLTjjNtRz+W26NYPOjZm/AmggD7sOb
+pohXcH/lpjDPHKtQuU1hqGR472RwjHi4Ni0ay+mQ4N8ltazKj5UMppf0YwUmxpGd
+tAh6xy/ZxRy0PQmJG/5kPcfgQMlMNRUgPlpq4qeo99S4F2P2JrtAsMIAZLvvaSY6
+bv4dbtn++CsvqXFdUpKPnDec7UbdsdhzmNhEHVkwtyqVlkMP42F0LQcbs76esvRE
+yQIDAQAB
+-----END PUBLIC KEY-----`;
+
+const PROXIES = [
+  "", "https://gh.llkk.cc/", "https://github.tbedu.top/",
+  "https://ghfile.geekertao.top/", "https://ghproxy.net/", "https://gh-proxy.com/",
+  "https://gh-proxy.net/", "https://cdn.gh-proxy.com/", "https://github.dpik.top/",
+  "https://j.1lin.dpdns.org/", "https://github.starrlzy.cn/",
+  "https://github-proxy.memory-echoes.cn/", "https://git.yylx.win/",
+  "https://ghm.078465.xyz/", "https://gh.927223.xyz/", "https://gh.felicity.ac.cn/",
+  "https://gh.bugdey.us.kg/", "https://cdn.akaere.online/", "https://gh.dpik.top/",
+  "https://gh.inkchills.cn/", "https://gh.catmak.name/", "https://gh.b52m.cn/",
+  "https://github.mxw.qzz.io/", "https://gh.acmsz.top/", "https://gh.jjj.gv.uy/",
+  "https://githubdog.com/", "https://gh.meali.top/", "https://slink.ltd/",
+  "https://github.tmby.shop/", "https://ghpr.cc/", "https://gh.tryxd.cn/",
+  "https://gitproxy.click/", "https://github.chenc.dev/", "https://gh.ddlc.top/",
+  "https://gitproxy.mrhjx.cn/", "https://gh.sixyin.com/", "https://gh.monlor.com/",
+  "https://ghfast.top/", "https://gh.jasonzeng.dev/", "https://github.geekery.cn/",
+  "https://fastgit.cc/", "https://github.ednovas.xyz/", "https://ghproxy.imciel.com/",
+  "https://github.xxlab.tech/", "https://gh.idayer.com/", "https://gh.chjina.com/",
+  "https://ghp.keleyaa.com/", "https://ghproxy.monkeyray.net/", "https://gh.noki.icu/"
+];
+
+// ── 工具 ──
+
+const LS_KEY = 'issued_private_key';
+const LS_SORTED = 'sorted_proxies';
+
+function log(el, msg) {
+  const d = new Date();
+  const t = d.toTimeString().slice(0, 8);
+  el.style.display = 'block';
+  el.textContent += `[${t}] ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog(el) { el.textContent = ''; el.style.display = 'none'; }
+
+function httpGet(url, timeoutMs) {
+  timeoutMs = timeoutMs || 6000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  return fetch(url, { signal: ctrl.signal }).then(r => {
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    return r.text();
+  }).catch(() => { clearTimeout(timer); return null; });
+}
+
+function httpGetBytes(url, timeoutMs) {
+  timeoutMs = timeoutMs || 6000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  return fetch(url, { signal: ctrl.signal }).then(r => {
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    return r.arrayBuffer();
+  }).catch(() => { clearTimeout(timer); return null; });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── 私钥 ──
+
+function loadKey() {
+  const k = localStorage.getItem(LS_KEY);
+  document.getElementById('keyHint').textContent = k ? '当前：已设置' : '当前：未设置';
+  if (k) document.getElementById('keyInput').value = k;
+}
+
+function showKeyModal() { document.getElementById('keyModal').classList.add('active'); }
+
+function saveKey() {
+  const v = document.getElementById('keyInput').value.trim();
+  if (!v) { alert('请输入私钥'); return; }
+  localStorage.setItem(LS_KEY, v);
+  document.getElementById('keyModal').classList.remove('active');
+  loadKey();
+}
+
+function clearKey() {
+  localStorage.removeItem(LS_KEY);
+  document.getElementById('keyInput').value = '';
+  document.getElementById('keyModal').classList.remove('active');
+  loadKey();
+}
+
+// 点击遮罩关闭
+document.getElementById('keyModal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('active');
+});
+
+loadKey();
+
+// ── 代理测速 ──
+
+async function benchmark() {
+  const btn = document.getElementById('benchBtn');
+  const logEl = document.getElementById('benchLog');
+  const resultEl = document.getElementById('benchResult');
+  btn.disabled = true;
+  clearLog(logEl);
+  resultEl.innerHTML = '';
+  log(logEl, `开始测速 ${PROXIES.length} 个节点 (20线程并发)`);
+
+  const results = [];
+  const concurrency = 20;
+  const testUrl = RAW_PATH + PUBLIC_KEY_FILE;
+  let completed = 0;
+
+  async function testProxy(proxy) {
+    const label = proxy || '直连';
+    const url = proxy + testUrl;
+    const start = performance.now();
+    try {
+      const text = await httpGet(url);
+      const elapsed = Math.round(performance.now() - start);
+      if (text !== null) {
+        log(logEl, `测速 [${++completed}/${PROXIES.length}] ${label} → ${elapsed}ms`);
+        return { proxy, elapsed, ok: true, data: text };
+      } else {
+        log(logEl, `测速 [${++completed}/${PROXIES.length}] ${label} → 失败`);
+        return { proxy, elapsed: Infinity, ok: false };
+      }
+    } catch (e) {
+      log(logEl, `测速 [${++completed}/${PROXIES.length}] ${label} → ${e.message}`);
+      return { proxy, elapsed: Infinity, ok: false };
+    }
+  }
+
+  for (let i = 0; i < PROXIES.length; i += concurrency) {
+    const batch = PROXIES.slice(i, i + concurrency).map(p => testProxy(p));
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults);
+  }
+
+  const sorted = results.filter(r => r.ok).sort((a, b) => a.elapsed - b.elapsed);
+  log(logEl, `共 ${sorted.length} 个可用节点`);
+
+  let html = '<table><tr><th>#</th><th>代理</th><th>延迟</th></tr>';
+  sorted.forEach((r, i) => {
+    html += `<tr><td>${i + 1}</td><td>${r.proxy || '直连'}</td><td>${r.elapsed}ms</td></tr>`;
+  });
+  html += '</table>';
+  resultEl.innerHTML = html;
+  btn.disabled = false;
+
+  // 缓存排序结果
+  const sortedUrls = sorted.map(r => r.proxy);
+  localStorage.setItem(LS_SORTED, JSON.stringify(sortedUrls));
+  log(logEl, '排序结果已缓存');
+}
+
+function loadSortedProxies() {
+  const raw = localStorage.getItem(LS_SORTED);
+  if (raw) {
+    try { return JSON.parse(raw); } catch (e) { }
+  }
+  return null;
+}
+
+// ── 获取云端配置 ──
+
+async function fetchConfig() {
+  const btn = document.getElementById('fetchBtn');
+  const logEl = document.getElementById('fetchLog');
+  const resultEl = document.getElementById('configResult');
+  const proxies = loadSortedProxies() || PROXIES;
+  btn.disabled = true;
+  clearLog(logEl);
+  resultEl.innerHTML = '';
+  log(logEl, `使用 ${proxies.length} 个代理拉取配置...`);
+
+  // 获取 issued.json
+  let jsonBytes = null;
+  let jsonStr = null;
+  for (let i = 0; i < proxies.length; i++) {
+    const p = proxies[i];
+    const url = (p || '') + RAW_PATH + ISSUED_FILE;
+    const label = p || '直连';
+    log(logEl, `[${i + 1}/${proxies.length}] ${label} issued.json`);
+    const buf = await httpGetBytes(url);
+    if (buf) {
+      const s = new TextDecoder().decode(buf);
+      if (s.startsWith('{')) {
+        jsonBytes = new Uint8Array(buf);
+        jsonStr = s;
+        log(logEl, `✅ issued.json 获取成功 (${buf.byteLength} 字节)`);
+        break;
+      }
+    }
+  }
+  if (!jsonBytes) {
+    log(logEl, '❌ 无法获取 issued.json');
+    btn.disabled = false;
+    return;
+  }
+
+  // 获取 issued.json.sig
+  let sigStr = null;
+  for (let i = 0; i < proxies.length; i++) {
+    const p = proxies[i];
+    const url = (p || '') + RAW_PATH + ISSUED_SIG_FILE;
+    const label = p || '直连';
+    log(logEl, `[${i + 1}/${proxies.length}] ${label} issued.json.sig`);
+    const s = await httpGet(url);
+    if (s && s.trim().match(/^[A-Za-z0-9+/=]+$/)) {
+      sigStr = s.trim();
+      log(logEl, `✅ issued.json.sig 获取成功 (${sigStr.length} 字符)`);
+      break;
+    }
+  }
+  if (!sigStr) {
+    log(logEl, '❌ 无法获取 issued.json.sig');
+    btn.disabled = false;
+    return;
+  }
+
+  // 验签
+  log(logEl, '正在验签...');
+  const valid = verifySignature(jsonStr, sigStr);
+  if (!valid) {
+    log(logEl, '❌ 签名验证失败！数据可能被篡改');
+    btn.disabled = false;
+    return;
+  }
+  log(logEl, '✅ 签名验证通过');
+
+  // 展示
+  try {
+    const root = JSON.parse(jsonStr);
+    const latest = root.latest || 0;
+    const codes = root.codes || {};
+    const ids = Object.keys(codes);
+    if (ids.length === 0) {
+      resultEl.innerHTML = '<p style="color:#6b7280">暂无激活码</p>';
+    } else {
+      let html = `<p style="font-size:13px;color:#6b7280;margin-bottom:8px">版本: ${latest} | 共 ${ids.length} 个激活码</p>`;
+      html += '<table><tr><th>ID</th><th>用户</th><th>过期</th><th>等级</th><th>警告文本</th></tr>';
+      ids.forEach(id => {
+        const c = codes[id];
+        const level = c.warn_level || 0;
+        const tagClass = 'tag-' + level;
+        html += `<tr>
+          <td style="font-family:monospace">${id}</td>
+          <td>${escHtml(c.user || '')}</td>
+          <td>${escHtml(c.expiry || '')}</td>
+          <td><span class="tag ${tagClass}">${level}</span></td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.warn_text || '')}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      resultEl.innerHTML = html;
+    }
+  } catch (e) {
+    log(logEl, '❌ 解析配置失败: ' + e.message);
+  }
+
+  btn.disabled = false;
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function verifySignature(jsonStr, sigB64) {
+  try {
+    const pubKey = forge.pki.publicKeyFromPem(EMBEDDED_PUBLIC_KEY);
+    const md = forge.md.sha256.create();
+    md.update(jsonStr, 'utf8');
+    const sigBytes = forge.util.decode64(sigB64);
+    return pubKey.verify(md.digest().getBytes(), sigBytes);
+  } catch (e) {
+    console.error('验签失败', e);
+    return false;
+  }
+}
+
+// ── 生成激活码 ──
+
+function generateCode() {
+  const id = document.getElementById('genId').value.trim();
+  const keyPem = localStorage.getItem(LS_KEY);
+  const output = document.getElementById('codeOutput');
+  const copyBtn = document.getElementById('copyBtn');
+  output.style.display = 'none';
+  copyBtn.style.display = 'none';
+
+  if (id.length !== 16) { alert('ID 必须为 16 位'); return; }
+  if (!keyPem) { alert('请先设置私钥'); showKeyModal(); return; }
+
+  try {
+    const privateKey = forge.pki.privateKeyFromPem(keyPem);
+    const message = 'com.example.fqdownloader||' + id;
+    const md = forge.md.sha256.create();
+    md.update(message, 'utf8');
+    const sigBytes = privateKey.sign(md);
+    const sigB64 = forge.util.encode64(sigBytes);
+    const code = id + ':' + sigB64;
+    output.textContent = code;
+    output.style.display = 'block';
+    copyBtn.style.display = 'inline-block';
+  } catch (e) {
+    alert('生成失败: ' + e.message);
+    console.error(e);
+  }
+}
+
+function copyCode() {
+  const text = document.getElementById('codeOutput').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '已复制';
+    setTimeout(() => { btn.textContent = '复制'; }, 2000);
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    alert('已复制');
+  });
+}
+</script>
+</body>
+</html>
